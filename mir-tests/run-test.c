@@ -43,6 +43,10 @@ int main (int argc, char *argv[]) {
   program_str = read_file (mir_fname);
   MIR_scan_string (ctx, program_str);
   mir_module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx));
+  if (mir_module == NULL) {
+    fprintf (stderr, "%s: there are no modules in the file %s\n", argv[0], mir_fname);
+    our_exit (1);
+  }
   if (DLIST_NEXT (MIR_module_t, mir_module) != NULL) {
     fprintf (stderr, "%s: there should be one module in the file %s\n", argv[0], mir_fname);
     our_exit (1);

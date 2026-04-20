@@ -203,6 +203,9 @@ foreach (num 13 14 15 16)
   add_test(interp-test${num} run_test -i ${PROJECT_SOURCE_DIR}/mir-tests/test${num}.mir)
 endforeach()
 
+add_test(interp-empty-input run_test -i ${PROJECT_SOURCE_DIR}/mir-tests/empty.mir)
+set_tests_properties(interp-empty-input PROPERTIES WILL_FAIL TRUE)
+
 # ------------------ MIR gen tests --------------------------
 
 foreach (num 1 2 3 4 5 6 7)

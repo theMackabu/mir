@@ -79,6 +79,36 @@ struct MIR_context {
 #define setjmp_addr ctx->setjmp_addr
 #define wrapper_end_addr ctx->wrapper_end_addr
 
+#if defined(__clang__) || defined(__GNUC__)
+static MIR_error_func_t load_error_func_atomic (MIR_context_t ctx) {
+  return __atomic_load_n (&error_func, __ATOMIC_ACQUIRE);
+}
+
+static void store_error_func_atomic (MIR_context_t ctx, MIR_error_func_t func) {
+  __atomic_store_n (&error_func, func, __ATOMIC_RELEASE);
+}
+
+static int load_func_redef_permission_atomic (MIR_context_t ctx) {
+  return __atomic_load_n (&func_redef_permission_p, __ATOMIC_ACQUIRE);
+}
+
+static void store_func_redef_permission_atomic (MIR_context_t ctx, int enable_p) {
+  __atomic_store_n (&func_redef_permission_p, enable_p, __ATOMIC_RELEASE);
+}
+#else
+static MIR_error_func_t load_error_func_atomic (MIR_context_t ctx) { return error_func; }
+
+static void store_error_func_atomic (MIR_context_t ctx, MIR_error_func_t func) { error_func = func; }
+
+static int load_func_redef_permission_atomic (MIR_context_t ctx) {
+  return func_redef_permission_p;
+}
+
+static void store_func_redef_permission_atomic (MIR_context_t ctx, int enable_p) {
+  func_redef_permission_p = enable_p;
+}
+#endif
+
 static void util_error (MIR_context_t ctx, const char *message);
 #define MIR_VARR_ERROR util_error
 #define MIR_HTAB_ERROR MIR_VARR_ERROR
@@ -665,18 +695,20 @@ static void scan_finish (MIR_context_t ctx);
 static void simplify_init (MIR_context_t ctx);
 static void simplify_finish (MIR_context_t ctx);
 
-MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return error_func; }  // ??? atomic
+MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return load_error_func_atomic (ctx); }
 
-void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {  // ?? atomic access
-  error_func = func;
+void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {
+  store_error_func_atomic (ctx, func);
 }
 
 MIR_alloc_t MIR_get_alloc (MIR_context_t ctx) { return ctx->alloc; }
 
-int MIR_get_func_redef_permission_p (MIR_context_t ctx) { return func_redef_permission_p; }
+int MIR_get_func_redef_permission_p (MIR_context_t ctx) {
+  return load_func_redef_permission_atomic (ctx);
+}
 
-void MIR_set_func_redef_permission (MIR_context_t ctx, int enable_p) {  // ?? atomic access
-  func_redef_permission_p = enable_p;
+void MIR_set_func_redef_permission (MIR_context_t ctx, int enable_p) {
+  store_func_redef_permission_atomic (ctx, enable_p);
 }
 
 static htab_hash_t item_hash (MIR_item_t it, void *arg MIR_UNUSED) {
@@ -959,7 +991,7 @@ static const char *type_str (MIR_context_t ctx, MIR_type_t tp) {
   case MIR_T_UNDEF: return "undef";
   default:
     if (MIR_blk_type_p (tp) && (n = tp - MIR_T_BLK) >= 0 && n < MIR_BLK_NUM) {
-      sprintf (str, "blk%d", n);
+      snprintf (str, sizeof (str), "blk%d", n);
       return get_ctx_str (ctx, str);
     }
     return "";
@@ -2406,7 +2438,7 @@ static MIR_reg_t new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t fu
     func->last_temp_num++;
     if (func->last_temp_num == 0)
       MIR_get_error_func (ctx) (MIR_unique_reg_error, "out of unique regs");
-    sprintf (reg_name, "%s%d", TEMP_REG_NAME_PREFIX, func->last_temp_num);
+    snprintf (reg_name, sizeof (reg_name), "%s%d", TEMP_REG_NAME_PREFIX, func->last_temp_num);
 
     if (find_rd_by_name (ctx, reg_name, func) == NULL)
       return MIR_new_func_reg (ctx, func, type, reg_name);
@@ -3967,7 +3999,7 @@ static void rename_regs (MIR_context_t ctx, MIR_func_t func, MIR_func_t called_f
   if (vars == NULL) return;
   for (size_t i = 0; i < nvars; i++) {
     VARR_TRUNC (char, temp_string, 0);
-    sprintf (buff, ".c%d_", func->n_inlines);
+    snprintf (buff, sizeof (buff), ".c%d_", func->n_inlines);
     VARR_PUSH_ARR (char, temp_string, buff, strlen (buff));
     var = VARR_GET (MIR_var_t, vars, i);
     type
@@ -5925,13 +5957,16 @@ struct scan_ctx {
 static void scan_error (MIR_context_t ctx, const char *format, ...) {
   char message[150];
   size_t len;
+  int formatted_len;
   va_list va;
 
   va_start (va, format);
   if (VARR_LENGTH (char, error_msg_buf) != 0) VARR_POP (char, error_msg_buf); /* remove last '\0' */
-  sprintf (message, "ln %lu: ", (unsigned long) curr_lno);
+  snprintf (message, sizeof (message), "ln %lu: ", (unsigned long) curr_lno);
   VARR_PUSH_ARR (char, error_msg_buf, message, strlen (message));
-  len = vsnprintf (message, sizeof (message), format, va);
+  formatted_len = vsnprintf (message, sizeof (message), format, va);
+  len = formatted_len < 0 ? 0 : (size_t) formatted_len;
+  if (len >= sizeof (message)) len = sizeof (message) - 1;
   VARR_PUSH_ARR (char, error_msg_buf, message, len);
   VARR_PUSH_ARR (char, error_msg_buf, "\n", 2); /* add '\n' and '\0' */
   va_end (va);

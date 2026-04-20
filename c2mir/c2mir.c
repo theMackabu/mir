@@ -884,9 +884,9 @@ static const char *get_token_name (c2m_ctx_t c2m_ctx, int token_code) {
   default:
     if ((s = str_find_by_key (c2m_ctx, token_code)) != NULL) return s;
     if (isprint (token_code))
-      sprintf (temp_str_buff, "%c", token_code);
+      snprintf (temp_str_buff, sizeof (temp_str_buff), "%c", token_code);
     else
-      sprintf (temp_str_buff, "%d", token_code);
+      snprintf (temp_str_buff, sizeof (temp_str_buff), "%d", token_code);
     return temp_str_buff;
   }
 }
@@ -3692,7 +3692,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       } else if (strcmp (t->repr, "__LINE__") == 0) {
         char str[50];
 
-        sprintf (str, "%d", t->pos.lno);
+        snprintf (str, sizeof (str), "%d", t->pos.lno);
         out_token (c2m_ctx, new_node_token (c2m_ctx, t->pos, str, T_NUMBER,
                                             new_i_node (c2m_ctx, t->pos.lno, t->pos)));
       } else if (strcmp (t->repr, "__DATE__") == 0) {
@@ -10292,15 +10292,15 @@ static op_t get_new_temp (c2m_ctx_t c2m_ctx, MIR_type_t t) {
 
   assert (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F
           || t == MIR_T_D || t == MIR_T_LD);
-  sprintf (reg_name,
-           t == MIR_T_I64   ? "I_%u"
-           : t == MIR_T_U64 ? "U_%u"
-           : t == MIR_T_I32 ? "i_%u"
-           : t == MIR_T_U32 ? "u_%u"
-           : t == MIR_T_F   ? "f_%u"
-           : t == MIR_T_D   ? "d_%u"
-                            : "D_%u",
-           reg_free_mark++);
+  snprintf (reg_name, sizeof (reg_name),
+            t == MIR_T_I64   ? "I_%u"
+            : t == MIR_T_U64 ? "U_%u"
+            : t == MIR_T_I32 ? "i_%u"
+            : t == MIR_T_U32 ? "u_%u"
+            : t == MIR_T_F   ? "f_%u"
+            : t == MIR_T_D   ? "d_%u"
+                             : "D_%u",
+            reg_free_mark++);
   reg = get_reg_var (c2m_ctx, t, reg_name, NULL).reg;
   return new_op (NULL, MIR_new_reg_op (ctx, reg));
 }
@@ -11100,15 +11100,15 @@ static const char *get_reg_var_name (c2m_ctx_t c2m_ctx, MIR_type_t promoted_type
                                      const char *suffix, unsigned func_scope_num) {
   char prefix[50];
 
-  sprintf (prefix,
-           promoted_type == MIR_T_I64   ? "I%u_"
-           : promoted_type == MIR_T_U64 ? "U%u_"
-           : promoted_type == MIR_T_I32 ? "i%u_"
-           : promoted_type == MIR_T_U32 ? "u%u_"
-           : promoted_type == MIR_T_F   ? "f%u_"
-           : promoted_type == MIR_T_D   ? "d%u_"
-                                        : "D%u_",
-           func_scope_num);
+  snprintf (prefix, sizeof (prefix),
+            promoted_type == MIR_T_I64   ? "I%u_"
+            : promoted_type == MIR_T_U64 ? "U%u_"
+            : promoted_type == MIR_T_I32 ? "i%u_"
+            : promoted_type == MIR_T_U32 ? "u%u_"
+            : promoted_type == MIR_T_F   ? "f%u_"
+            : promoted_type == MIR_T_D   ? "d%u_"
+                                         : "D%u_",
+            func_scope_num);
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (c2m_ctx, prefix);
   add_to_temp_string (c2m_ctx, suffix);
@@ -11131,7 +11131,7 @@ static const char *get_func_static_var_name (c2m_ctx_t c2m_ctx, const char *suff
   char prefix[50];
   unsigned func_scope_num = ((struct node_scope *) decl->scope->attr)->func_scope_num;
 
-  sprintf (prefix, "S%u_", func_scope_num);
+  snprintf (prefix, sizeof (prefix), "S%u_", func_scope_num);
   return get_func_var_name (c2m_ctx, prefix, suffix);
 }
 
@@ -13528,7 +13528,7 @@ static MIR_item_t get_mir_proto (c2m_ctx_t c2m_ctx, int vararg_p) {
   p.res_types = VARR_ADDR (MIR_type_t, proto_info.ret_types);
   p.args = proto_info.arg_vars;
   if (HTAB_DO (MIR_item_t, proto_tab, &pi, HTAB_FIND, el)) return el;
-  sprintf (buff, "proto%d", curr_mir_proto_num++);
+  snprintf (buff, sizeof (buff), "proto%d", curr_mir_proto_num++);
   el = (vararg_p ? MIR_new_vararg_proto_arr
                  : MIR_new_proto_arr) (c2m_ctx->ctx, buff, p.nres, p.res_types,
                                        VARR_LENGTH (MIR_var_t, proto_info.arg_vars),
@@ -14176,7 +14176,7 @@ static void compile_finish (c2m_ctx_t c2m_ctx) {
 #include "real-time.h"
 
 static const char *get_module_name (c2m_ctx_t c2m_ctx) {
-  sprintf (temp_str_buff, "M%ld", (long) c2m_options->module_num);
+  snprintf (temp_str_buff, sizeof (temp_str_buff), "M%ld", (long) c2m_options->module_num);
   return temp_str_buff;
 }
 

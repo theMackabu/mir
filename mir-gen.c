@@ -358,6 +358,22 @@ static void MIR_NO_RETURN util_error (gen_ctx_t gen_ctx, const char *message) {
   (*MIR_get_error_func (gen_ctx->ctx)) (MIR_alloc_error, message);
 }
 
+#if defined(__clang__) || defined(__GNUC__)
+static void *load_machine_code_atomic (MIR_func_t func) {
+  return __atomic_load_n (&func->machine_code, __ATOMIC_ACQUIRE);
+}
+
+static void store_machine_code_atomic (MIR_func_t func, void *machine_code) {
+  __atomic_store_n (&func->machine_code, machine_code, __ATOMIC_RELEASE);
+}
+#else
+static void *load_machine_code_atomic (MIR_func_t func) { return func->machine_code; }
+
+static void store_machine_code_atomic (MIR_func_t func, void *machine_code) {
+  func->machine_code = machine_code;
+}
+#endif
+
 static MIR_alloc_t gen_alloc (gen_ctx_t gen_ctx) {
   return MIR_get_alloc (gen_ctx->ctx);
 }
@@ -2536,7 +2552,8 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t old_reg, int sep, siz
   VARR_TRUNC (char, reg_name, 0);
   VARR_PUSH_ARR (char, reg_name, name, strlen (name));
   VARR_PUSH (char, reg_name, sep);
-  sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
+  snprintf (ind_str, sizeof (ind_str), "%lu",
+            (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
   if (hard_reg_name == NULL) {
     new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name)) + MAX_HARD_REG;
@@ -9304,7 +9321,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
 static void *print_and_execute_wrapper (gen_ctx_t gen_ctx, MIR_item_t called_func) {
   gen_assert (called_func->item_type == MIR_func_item);
   fprintf (stderr, "Calling %s\n", called_func->u.func->name);
-  return called_func->u.func->machine_code;
+  return load_machine_code_atomic (called_func->u.func);
 }
 #endif
 
@@ -9321,7 +9338,7 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   uint32_t bbs_num;
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
-  if (func_item->u.func->machine_code != NULL) {
+  if (load_machine_code_atomic (func_item->u.func) != NULL) {
     gen_assert (func_item->u.func->call_addr != NULL);
     _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
     DEBUG (2, {
@@ -9547,8 +9564,7 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);
-  /* ??? We should use atomic here but c2mir does not implement them yet.  */
-  func_item->u.func->machine_code = machine_code;
+  store_machine_code_atomic (func_item->u.func, machine_code);
   return func_item->addr;
 }
 
@@ -9825,7 +9841,7 @@ static void generate_func_and_redirect (MIR_context_t ctx, MIR_item_t func_item,
 
 static void *generate_func_and_redirect_to_func_code (MIR_context_t ctx, MIR_item_t func_item) {
   generate_func_and_redirect (ctx, func_item, TRUE);
-  return func_item->u.func->machine_code;
+  return load_machine_code_atomic (func_item->u.func);
 }
 
 void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
