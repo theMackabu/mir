@@ -677,10 +677,11 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 /* Save x0,x1; x0=ctx; x1=called_func; x10=hook_address;goto wrap_end. */
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
   static const uint32_t save_insn = 0xa9bf07e0; /* stp R0, R1, [SP, #-16]! */
-  static const uint32_t jmp_pat = 0x14000000;   /* jmp */
+  static const uint32_t jmp_pat = 0x14000000;   /* b offset */
+  static const uint32_t br_x9_pat = 0xd61f0120; /* br x9 */
   uint32_t insn;
   uint8_t *base_addr, *curr_addr, *res_code = NULL;
-  size_t len = 5 * 4; /* initial len */
+  size_t len = 5 * 4 + 4 * 4;
   VARR (uint8_t) * code;
 
   VARR_CREATE (uint8_t, code, ctx->alloc, 128);
@@ -694,9 +695,13 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     curr_addr += gen_mov_addr (code, 1, called_func);   /*mov x1,called_func */
     curr_addr += gen_mov_addr (code, 10, hook_address); /*mov x10,hook_address */
     int64_t offset = (uint32_t *) wrapper_end_addr - (uint32_t *) curr_addr;
-    mir_assert (-(int64_t) MAX_BR_OFFSET <= offset && offset < (int64_t) MAX_BR_OFFSET);
-    insn = jmp_pat | ((uint32_t) offset & BR_OFFSET_MASK);
-    push_insns (code, &insn, sizeof (insn));
+    if (-(int64_t) MAX_BR_OFFSET <= offset && offset < (int64_t) MAX_BR_OFFSET) {
+      insn = jmp_pat | ((uint32_t) offset & BR_OFFSET_MASK);
+      push_insns (code, &insn, sizeof (insn));
+    } else {
+      gen_mov_addr (code, 9, wrapper_end_addr);
+      push_insns (code, &br_x9_pat, sizeof (br_x9_pat));
+    }
     len = VARR_LENGTH (uint8_t, code);
     res_code = _MIR_publish_code_by_addr (ctx, base_addr, VARR_ADDR (uint8_t, code), len);
     if (res_code != NULL) break;
