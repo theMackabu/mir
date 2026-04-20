@@ -909,14 +909,14 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       MIR_op_t prev_sp_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       MIR_op_t va_op = insn->ops[0];
       MIR_reg_t va_reg;
-      int gp_offset, fp_offset;
 
       assert (func->vararg_p && va_op.mode == MIR_OP_VAR);
-      gp_offset = (int_arg_num >= 8 ? 0 : 8 * int_arg_num - 64);
-      fp_offset = (fp_arg_num >= 8 ? 0 : 16 * fp_arg_num - 128);
       va_reg = va_op.u.var;
       /* Insns can be not simplified as soon as they match a machine insn.  */
 #if !defined(__APPLE__)
+      int gp_offset = int_arg_num >= 8 ? 0 : 8 * int_arg_num - 64;
+      int fp_offset = fp_arg_num >= 8 ? 0 : 16 * fp_arg_num - 128;
+
       /* mem32[va_reg].__gr_offset = gp_offset; mem32[va_reg].__vr_offset = fp_offset */
       gen_mov (gen_ctx, insn, MIR_MOV, treg_op, MIR_new_int_op (ctx, gp_offset));
       gen_mov (gen_ctx, insn, MIR_MOV,
