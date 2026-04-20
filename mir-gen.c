@@ -94,7 +94,6 @@
 #include <inttypes.h>
 
 #include <assert.h>
-#include "mir-code-alloc.h"
 #include "mir-alloc.h"
 
 #define gen_assert(cond) assert (cond)
@@ -359,6 +358,9 @@ static void MIR_NO_RETURN util_error (gen_ctx_t gen_ctx, const char *message) {
 }
 
 #if defined(__clang__) || defined(__GNUC__)
+static char machine_code_in_progress_marker;
+static char call_addr_in_progress_marker;
+
 static void *load_machine_code_atomic (MIR_func_t func) {
   return __atomic_load_n (&func->machine_code, __ATOMIC_ACQUIRE);
 }
@@ -366,13 +368,80 @@ static void *load_machine_code_atomic (MIR_func_t func) {
 static void store_machine_code_atomic (MIR_func_t func, void *machine_code) {
   __atomic_store_n (&func->machine_code, machine_code, __ATOMIC_RELEASE);
 }
+
+static int claim_machine_code_generation_atomic (MIR_func_t func) {
+  void *expected = NULL;
+
+  return __atomic_compare_exchange_n (&func->machine_code, &expected, &machine_code_in_progress_marker,
+                                      FALSE, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+}
+
+static void *load_call_addr_atomic (MIR_func_t func) {
+  return __atomic_load_n (&func->call_addr, __ATOMIC_ACQUIRE);
+}
+
+static void store_call_addr_atomic (MIR_func_t func, void *call_addr) {
+  __atomic_store_n (&func->call_addr, call_addr, __ATOMIC_RELEASE);
+}
+
+static int claim_call_addr_generation_atomic (MIR_func_t func) {
+  void *expected = NULL;
+
+  return __atomic_compare_exchange_n (&func->call_addr, &expected, &call_addr_in_progress_marker,
+                                      FALSE, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+}
 #else
+static char machine_code_in_progress_marker;
+static char call_addr_in_progress_marker;
+
 static void *load_machine_code_atomic (MIR_func_t func) { return func->machine_code; }
 
 static void store_machine_code_atomic (MIR_func_t func, void *machine_code) {
   func->machine_code = machine_code;
 }
+
+static int claim_machine_code_generation_atomic (MIR_func_t func) {
+  if (func->machine_code != NULL) return FALSE;
+  func->machine_code = &machine_code_in_progress_marker;
+  return TRUE;
+}
+
+static void *load_call_addr_atomic (MIR_func_t func) { return func->call_addr; }
+
+static void store_call_addr_atomic (MIR_func_t func, void *call_addr) { func->call_addr = call_addr; }
+
+static int claim_call_addr_generation_atomic (MIR_func_t func) {
+  if (func->call_addr != NULL) return FALSE;
+  func->call_addr = &call_addr_in_progress_marker;
+  return TRUE;
+}
 #endif
+
+static int machine_code_generation_in_progress_p (void *machine_code) {
+  return machine_code == &machine_code_in_progress_marker;
+}
+
+static int call_addr_generation_in_progress_p (void *call_addr) {
+  return call_addr == &call_addr_in_progress_marker;
+}
+
+static void *wait_for_machine_code_generation (MIR_func_t func) {
+  void *machine_code;
+
+  do {
+    machine_code = load_machine_code_atomic (func);
+  } while (machine_code_generation_in_progress_p (machine_code));
+  return machine_code;
+}
+
+static void *wait_for_call_addr_generation (MIR_func_t func) {
+  void *call_addr;
+
+  do {
+    call_addr = load_call_addr_atomic (func);
+  } while (call_addr_generation_in_progress_p (call_addr));
+  return call_addr;
+}
 
 static MIR_alloc_t gen_alloc (gen_ctx_t gen_ctx) {
   return MIR_get_alloc (gen_ctx->ctx);
@@ -1960,7 +2029,7 @@ static void solve_dataflow (gen_ctx_t gen_ctx, int forward_p, void (*con_func_0)
   while (VARR_LENGTH (bb_t, worklist) != 0) {
     VARR_TRUNC (bb_t, pending, 0);
     addr = VARR_ADDR (bb_t, worklist);
-    qsort (addr, VARR_LENGTH (bb_t, worklist), sizeof (bb), forward_p ? rpost_cmp : post_cmp);
+    qsort (addr, VARR_LENGTH (bb_t, worklist), sizeof (*addr), forward_p ? rpost_cmp : post_cmp);
     bitmap_clear (bb_to_consider);
     for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
       int changed_p = iter == 0;
@@ -6627,7 +6696,8 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
     for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
       VARR_PUSH (bb_t, worklist, bb);
     if (optimize_level <= 1) /* arrange BBs in PO (post order) for more compact ranges: */
-      qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb), post_cmp);
+      qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist),
+             sizeof (VARR_ADDR (bb_t, worklist)[0]), post_cmp);
     for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
       bb = VARR_GET (bb_t, worklist, i);
       if (DLIST_HEAD (bb_insn_t, bb->bb_insns) == NULL) continue;
@@ -9331,6 +9401,7 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
   uint8_t *code;
   void *machine_code = NULL;
+  void *call_addr;
   size_t code_len = 0;
 #if !MIR_NO_GEN_DEBUG
   double start_time = real_usec_time ();
@@ -9338,9 +9409,14 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   uint32_t bbs_num;
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
-  if (load_machine_code_atomic (func_item->u.func) != NULL) {
-    gen_assert (func_item->u.func->call_addr != NULL);
-    _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
+  machine_code = load_machine_code_atomic (func_item->u.func);
+  if (machine_code != NULL || !claim_machine_code_generation_atomic (func_item->u.func)) {
+    machine_code = machine_code == NULL ? wait_for_machine_code_generation (func_item->u.func) : machine_code;
+    if (machine_code_generation_in_progress_p (machine_code))
+      machine_code = wait_for_machine_code_generation (func_item->u.func);
+    call_addr = wait_for_call_addr_generation (func_item->u.func);
+    gen_assert (call_addr != NULL);
+    _MIR_redirect_thunk (ctx, func_item->addr, call_addr);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++The code for %s has been already generated\n",
                MIR_item_name (ctx, func_item));
@@ -9540,16 +9616,19 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   }
   if (machine_code_p) {
     code = target_translate (gen_ctx, &code_len);
-    machine_code = func_item->u.func->call_addr = _MIR_publish_code (ctx, code, code_len);
-    target_rebase (gen_ctx, func_item->u.func->call_addr);
+    machine_code = _MIR_publish_code (ctx, code, code_len);
+    call_addr = machine_code;
+    target_rebase (gen_ctx, call_addr);
 #if MIR_GEN_CALL_TRACE
-    func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
+    call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
     DEBUG (2, {
       _MIR_dump_code (NULL, machine_code, code_len);
       fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
     });
-    _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
+    store_call_addr_atomic (func_item->u.func, call_addr);
+    store_machine_code_atomic (func_item->u.func, machine_code);
+    _MIR_redirect_thunk (ctx, func_item->addr, call_addr);
   }
   if (optimize_level != 0) destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
   destroy_func_cfg (gen_ctx);
@@ -9564,7 +9643,6 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);
-  store_machine_code_atomic (func_item->u.func, machine_code);
   return func_item->addr;
 }
 
@@ -9830,12 +9908,25 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 
 /* Lazy func generation is done right away. */
 static void generate_func_and_redirect (MIR_context_t ctx, MIR_item_t func_item, int full_p) {
+  void *addr;
+
+  if (!full_p) {
+    addr = load_call_addr_atomic (func_item->u.func);
+    if (addr != NULL || !claim_call_addr_generation_atomic (func_item->u.func)) {
+      addr = addr == NULL ? wait_for_call_addr_generation (func_item->u.func) : addr;
+      if (call_addr_generation_in_progress_p (addr))
+        addr = wait_for_call_addr_generation (func_item->u.func);
+      gen_assert (addr != NULL);
+      _MIR_redirect_thunk (ctx, func_item->addr, addr);
+      return;
+    }
+  }
   generate_func_code (ctx, func_item, full_p);
   if (full_p) return;
   gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
-  void *addr;
   create_bb_stubs (gen_ctx);
   (void) get_bb_version (gen_ctx, &((struct bb_stub *) func_item->data)[0], 0, NULL, TRUE, &addr);
+  store_call_addr_atomic (func_item->u.func, addr);
   _MIR_redirect_thunk (ctx, func_item->addr, addr);
 }
 
