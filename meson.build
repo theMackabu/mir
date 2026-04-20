@@ -5,6 +5,7 @@ cpu = host_machine.cpu_family()
 mir_sources = files('mir.c', 'mir-gen.c')
 
 mir_warn_args = cc.get_supported_arguments([
+  '-fsigned-char',
   '-Wno-unused-function',
   '-Wno-unused-variable',
   '-Wno-unused-parameter',
