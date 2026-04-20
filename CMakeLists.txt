@@ -125,9 +125,17 @@ target_link_libraries(scan_test mir)
 add_executable (io_test "mir-tests/io.c")
 target_link_libraries(io_test mir)
 
+if(NOT WIN32)
+  add_executable (dump_code_security_test "mir-tests/dump-code-security.c")
+  target_link_libraries(dump_code_security_test mir)
+endif()
+
 add_test(simplify-test simplify_test)
 add_test(scan-test scan_test)
 add_test(io-test io_test)
+if(NOT WIN32)
+  add_test(dump-code-security-test dump_code_security_test)
+endif()
 
 # ------------------ Common for MIR tests ----------------------
 add_executable (run_test "mir-tests/run-test.c")

@@ -6837,64 +6837,14 @@ static void scan_finish (MIR_context_t ctx) {
 
 /* New Page */
 
-#ifndef _WIN32
-#include <sys/types.h>
-#include <unistd.h>
-#else
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#define getpid GetCurrentProcessId
-#define popen _popen
-#define pclose _pclose
-#endif
-
 void _MIR_dump_code (const char *name, uint8_t *code, size_t code_len) {
-  size_t i;
-  int ch;
-  char cfname[50];
-  char command[500];
-  FILE *f;
-#if !defined(__APPLE__)
-  char bfname[30];
-  FILE *bf;
-#endif
-
-  if (name != NULL) fprintf (stderr, "%s:", name);
-  sprintf (cfname, "_mir_%lu.c", (unsigned long) getpid ());
-  if ((f = fopen (cfname, "w")) == NULL) return;
-#if defined(__APPLE__)
-  fprintf (f, "unsigned char code[] = {");
-  for (i = 0; i < code_len; i++) {
-    if (i != 0) fprintf (f, ", ");
-    fprintf (f, "0x%x", code[i]);
+  if (name != NULL) fprintf (stderr, "%s:\n", name);
+  fprintf (stderr, "machine code bytes (%lu):", (unsigned long) code_len);
+  for (size_t i = 0; i < code_len; i++) {
+    if (i % 16 == 0) fprintf (stderr, "\n%04lx:", (unsigned long) i);
+    fprintf (stderr, " %02x", code[i]);
   }
-  fprintf (f, "};\n");
-  fclose (f);
-#if defined(__aarch64__)
-  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=__data -D %s.o; rm -f %s.o %s",
-           cfname, cfname, cfname, cfname, cfname);
-#else
-  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data -D %s.o; rm -f %s.o %s",
-           cfname, cfname, cfname, cfname, cfname);
-#endif
-#else
-  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
-  if ((bf = fopen (bfname, "wb")) == NULL) return;
-  fprintf (f, "void code (void) {}\n");
-  for (i = 0; i < code_len; i++) fputc (code[i], bf);
-  fclose (f);
-  fclose (bf);
-  sprintf (command,
-           "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
-           "--adjust-vma=0x%llx -d %s.o; rm -f "
-           "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long long) code, cfname, cfname, cfname,
-           bfname);
-#endif
-  fprintf (stderr, "%s\n", command);
-  if ((f = popen (command, "r")) == NULL) return;
-  while ((ch = fgetc (f)) != EOF) fprintf (stderr, "%c", ch);
-  pclose (f);
+  fprintf (stderr, "\n");
 }
 
 /* New Page */
@@ -6954,7 +6904,8 @@ static void hard_reg_name_init (MIR_context_t ctx) {
   if ((ctx->hard_reg_ctx = MIR_malloc (ctx->alloc, sizeof (struct hard_reg_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   HTAB_CREATE (hard_reg_desc_t, hard_reg_desc_tab, ctx->alloc, 200, hard_reg_desc_hash, hard_reg_desc_eq, NULL);
-  for (size_t i = 0; i * sizeof (char *) < sizeof (target_hard_reg_names); i++) {
+  for (size_t i = 0; i < sizeof (target_hard_reg_names) / sizeof (target_hard_reg_names[0]);
+       i++) {
     desc.num = (int) i;
     desc.name = target_hard_reg_names[i];
     res = HTAB_DO (hard_reg_desc_t, hard_reg_desc_tab, desc, HTAB_INSERT, tab_desc);
