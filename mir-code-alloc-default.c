@@ -19,6 +19,8 @@ static inline int get_native_mem_protect_flags (MIR_mem_protect_t prot) {
   return prot == PROT_WRITE_EXEC ?
 #if defined(__riscv)
     (PROT_WRITE | PROT_READ | PROT_EXEC)
+#elif defined(__linux__) && defined(__aarch64__)
+    (PROT_WRITE | PROT_READ)
 #else
     (PROT_WRITE | PROT_EXEC)
 #endif
@@ -59,6 +61,8 @@ static void *default_mem_map (size_t len, void *user_data CODE_ALLOC_UNUSED) {
 #if defined(__APPLE__) && defined(__aarch64__)
   return mmap (NULL, len, PROT_EXEC | PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT,
                -1, 0);
+#elif defined(__linux__) && defined(__aarch64__)
+  return mmap (NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #else
   return mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
