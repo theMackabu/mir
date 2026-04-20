@@ -818,9 +818,9 @@ static void remove_item (MIR_context_t ctx, MIR_item_t item) {
   case MIR_func_item:
     remove_func_insns (ctx, item, &item->u.func->insns);
     remove_func_insns (ctx, item, &item->u.func->original_insns);
-    VARR_DESTROY (MIR_var_t, item->u.func->vars);
+    if (item->u.func->vars != NULL) VARR_DESTROY (MIR_var_t, item->u.func->vars);
     if (item->u.func->global_vars != NULL) VARR_DESTROY (MIR_var_t, item->u.func->global_vars);
-    func_regs_finish (ctx, item->u.func);
+    if (item->u.func->internal != NULL) func_regs_finish (ctx, item->u.func);
     MIR_free (ctx->alloc, item->u.func);
     break;
   case MIR_proto_item:
