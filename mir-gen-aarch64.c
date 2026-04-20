@@ -699,6 +699,7 @@ DEF_VARR (label_ref_t);
 
 struct target_ctx {
   unsigned char alloca_p, block_arg_func_p, leaf_p, short_bb_branch_p;
+  unsigned char named_int_arg_regs_num, named_fp_arg_regs_num;
   size_t small_aggregate_save_area;
   MIR_insn_t temp_jump;
   const char *temp_jump_replacement;
@@ -714,6 +715,8 @@ struct target_ctx {
 #define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define short_bb_branch_p gen_ctx->target_ctx->short_bb_branch_p
+#define named_int_arg_regs_num gen_ctx->target_ctx->named_int_arg_regs_num
+#define named_fp_arg_regs_num gen_ctx->target_ctx->named_fp_arg_regs_num
 #define small_aggregate_save_area gen_ctx->target_ctx->small_aggregate_save_area
 #define temp_jump gen_ctx->target_ctx->temp_jump
 #define temp_jump_replacement gen_ctx->target_ctx->temp_jump_replacement
@@ -831,6 +834,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       mem_size += type == MIR_T_LD ? 16 : 8;
     }
   }
+  named_int_arg_regs_num = int_arg_num > 8 ? 8 : int_arg_num;
+  named_fp_arg_regs_num = fp_arg_num > 8 ? 8 : fp_arg_num;
   alloca_p = FALSE;
   leaf_p = TRUE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
@@ -1084,6 +1089,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #if !defined(__APPLE__)
   if (func->vararg_p) {  // ??? saving only regs corresponding to ...
     MIR_reg_t base = SP_HARD_REG;
+    MIR_reg_t reg;
     int64_t start;
 
     start = (int64_t) frame_size - reg_save_area_size;
@@ -1093,22 +1099,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       start = 0;
       base = R9_HARD_REG;
     }
-    fsave (gen_ctx, anchor, start, base, V0_HARD_REG);
-    fsave (gen_ctx, anchor, start + 16, base, V1_HARD_REG);
-    fsave (gen_ctx, anchor, start + 32, base, V2_HARD_REG);
-    fsave (gen_ctx, anchor, start + 48, base, V3_HARD_REG);
-    fsave (gen_ctx, anchor, start + 64, base, V4_HARD_REG);
-    fsave (gen_ctx, anchor, start + 80, base, V5_HARD_REG);
-    fsave (gen_ctx, anchor, start + 96, base, V6_HARD_REG);
-    fsave (gen_ctx, anchor, start + 112, base, V7_HARD_REG);
-    isave (gen_ctx, anchor, start + 128, base, R0_HARD_REG);
-    isave (gen_ctx, anchor, start + 136, base, R1_HARD_REG);
-    isave (gen_ctx, anchor, start + 144, base, R2_HARD_REG);
-    isave (gen_ctx, anchor, start + 152, base, R3_HARD_REG);
-    isave (gen_ctx, anchor, start + 160, base, R4_HARD_REG);
-    isave (gen_ctx, anchor, start + 168, base, R5_HARD_REG);
-    isave (gen_ctx, anchor, start + 176, base, R6_HARD_REG);
-    isave (gen_ctx, anchor, start + 184, base, R7_HARD_REG);
+    for (reg = V0_HARD_REG + named_fp_arg_regs_num; reg <= V7_HARD_REG; reg++)
+      fsave (gen_ctx, anchor, start + (reg - V0_HARD_REG) * 16, base, reg);
+    for (reg = R0_HARD_REG + named_int_arg_regs_num; reg <= R7_HARD_REG; reg++)
+      isave (gen_ctx, anchor, start + 128 + (reg - R0_HARD_REG) * 8, base, reg);
   }
 #endif
   /* Saving callee saved hard registers: */
