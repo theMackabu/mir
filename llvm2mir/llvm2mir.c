@@ -73,8 +73,8 @@ static htab_hash_t bb_gen_info_hash (bb_gen_info_t bb_gen_info, void *arg) {
 }
 
 static void init_bb_gen_info (void) {
-  HTAB_CREATE (bb_gen_info_t, bb_gen_info_tab, 64, bb_gen_info_hash, bb_gen_info_eq, NULL);
-  VARR_CREATE (bb_gen_info_t, bb_gen_infos, 0);
+  HTAB_CREATE (bb_gen_info_t, bb_gen_info_tab, MIR_get_alloc (context), 64, bb_gen_info_hash, bb_gen_info_eq, NULL);
+  VARR_CREATE (bb_gen_info_t, bb_gen_infos, MIR_get_alloc (context), 0);
 }
 
 static void clear_bb_gen_info (bb_gen_info_t bb_gen_info) {
@@ -173,7 +173,7 @@ static void add_bb_dest (LLVMBasicBlockRef bb, LLVMBasicBlockRef dest_bb, MIR_in
   res = HTAB_DO (bb_gen_info_t, bb_gen_info_tab, &temp_bb_gen_info, HTAB_FIND, bb_gen_info);
   assert (res);
   e = get_out_edge (bb_gen_info, dest_bb);
-  if (e->br_insns == NULL) VARR_CREATE (MIR_insn_t, e->br_insns, 16);
+  if (e->br_insns == NULL) VARR_CREATE (MIR_insn_t, e->br_insns, MIR_get_alloc (context), 16);
   VARR_PUSH (MIR_insn_t, e->br_insns, mir_insn);
 }
 
@@ -797,7 +797,7 @@ static void generate_edge_phi_op_eval (bb_gen_info_t bi) {
 
 static void init_phi_generation (void) {
   curr_set_insn_check = curr_phi_loop_reg_num = 0;
-  VARR_CREATE (set_insn_t, set_insns, 0);
+  VARR_CREATE (set_insn_t, set_insns, MIR_get_alloc (context), 0);
 }
 
 static void finish_phi_generation (void) { VARR_DESTROY (set_insn_t, set_insns); }
@@ -1398,16 +1398,16 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
   context = c;
   TD = LLVMGetModuleDataLayout (module);
   init_bb_gen_info ();
-  HTAB_CREATE (expr_res_t, expr_res_tab, 512, expr_res_hash, expr_res_eq, NULL);
-  HTAB_CREATE (item_t, item_tab, 64, item_hash, item_eq, NULL);
+  HTAB_CREATE (expr_res_t, expr_res_tab, MIR_get_alloc (context), 512, expr_res_hash, expr_res_eq, NULL);
+  HTAB_CREATE (item_t, item_tab, MIR_get_alloc (context), 64, item_hash, item_eq, NULL);
   id = LLVMGetModuleIdentifier (module, &len);
   curr_mir_module = MIR_new_module (context, id);
   ptr_size = LLVMPointerSize (TD);
   assert (ptr_size == 4 || ptr_size == 8);
-  VARR_CREATE (char, string, 0);
-  VARR_CREATE (MIR_var_t, mir_vars, 0);
-  VARR_CREATE (MIR_op_t, mir_ops, 0);
-  VARR_CREATE (LLVMTypeRef, types, 0);
+  VARR_CREATE (char, string, MIR_get_alloc (context), 0);
+  VARR_CREATE (MIR_var_t, mir_vars, MIR_get_alloc (context), 0);
+  VARR_CREATE (MIR_op_t, mir_ops, MIR_get_alloc (context), 0);
+  VARR_CREATE (LLVMTypeRef, types, MIR_get_alloc (context), 0);
   /* Loop through all globals in the module: */
   for (LLVMValueRef global = LLVMGetFirstGlobal (module); global;
        global = LLVMGetNextGlobal (global)) {
