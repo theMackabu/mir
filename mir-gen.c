@@ -4382,10 +4382,10 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e;
       mem_expr_t prev_mem_expr, mem_expr;
-      MIR_op_t op;
-      int add_def_p, const_p, cont_p;
+      MIR_op_t op, add_ext_temp_op;
+      int add_def_p, add_ext_p, const_p, cont_p;
       MIR_type_t type;
-      MIR_insn_code_t move_code;
+      MIR_insn_code_t move_code, ext_code;
       MIR_insn_t mem_insn, new_insn, new_insn2, def_insn, after, insn = bb_insn->insn;
       ssa_edge_t se, se2;
       bb_insn_t def_bb_insn, new_bb_copy_insn;
@@ -4615,6 +4615,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_DMOV:
       case MIR_LDMOV:
         if (insn->ops[0].mode == MIR_OP_VAR_MEM) { /* store */
+          if (optimize_level < 3) continue;
           if ((se = insn->ops[1].data) != NULL && se->def->alloca_flag) full_escape_p = TRUE;
           se = insn->ops[0].data; /* address def actually */
           mem_expr = find_mem_expr (gen_ctx, insn);
@@ -4661,6 +4662,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
           print_bb_insn_value (gen_ctx, bb_insn);
           continue;
         } else if (insn->ops[1].mode == MIR_OP_VAR_MEM) { /* load */
+          if (optimize_level < 3) continue;
           if (insn->ops[0].data == NULL) continue;        /* dead load */
           se = insn->ops[1].data;                         /* address def actually */
           mem_expr = find_mem_expr (gen_ctx, insn);
@@ -4683,11 +4685,35 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
               copy_gvn_info (bb_insn, mem_bb_insn);
               print_bb_insn_value (gen_ctx, bb_insn);
               temp_reg = mem_expr->temp_reg;
+              add_ext_p = TRUE;
+              switch (op_ref->u.mem.type) {
+                case MIR_T_I8:
+                  ext_code = MIR_EXT8;
+                  break;
+                case MIR_T_I16:
+                  ext_code = MIR_EXT16;
+                  break;
+                case MIR_T_I32:
+                  ext_code = MIR_EXT32;
+                  break;
+                case MIR_T_U8:
+                  ext_code = MIR_UEXT8;
+                  break;
+                case MIR_T_U16:
+                  ext_code = MIR_UEXT16;
+                  break;
+                case MIR_T_U32:
+                  ext_code = MIR_UEXT32;
+                  break;
+                default:
+                  add_ext_p = FALSE;
+              }
+              gen_assert(insn->code == MIR_MOV || !add_ext_p);
               add_def_p = temp_reg == MIR_NON_VAR;
               if (add_def_p) {
                 mem_expr->temp_reg = temp_reg
                   = get_expr_temp_reg (gen_ctx, mem_expr->insn, &mem_expr->temp_reg);
-                new_insn = MIR_new_insn (ctx, insn->code, _MIR_new_var_op (ctx, temp_reg),
+                new_insn = MIR_new_insn (ctx, add_ext_p ? ext_code : insn->code, _MIR_new_var_op (ctx, temp_reg),
                                          op_ref == &mem_insn->ops[0] ? mem_insn->ops[1]
                                                                      : mem_insn->ops[0]);
                 new_insn->ops[1].data = NULL; /* remove ssa edge taken from load/store op */
@@ -6648,6 +6674,12 @@ static void jump_opt (gen_ctx_t gen_ctx) {
     DEBUG (1, { fprintf (debug_file, "%ld deleted unrechable bb insns\n", bb_deleted_insns_num); });
   }
   bitmap_clear (temp_bitmap);
+  for (MIR_lref_data_t lref = curr_func_item->u.func->first_lref; lref != NULL;
+       lref = lref->next) {
+    bitmap_set_bit_p (temp_bitmap, lref->label->ops[0].u.u);
+    if (lref->label2 != NULL)
+      bitmap_set_bit_p (temp_bitmap, lref->label2->ops[0].u.u);
+  }
   for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     bb_insn_t bb_insn;
     int i, start_nop, bound_nop;
@@ -7951,7 +7983,7 @@ struct rewrite_data {
   bitmap_t live, regs_to_save;
 };
 
-#define MAX_INSN_RELOAD_MEM_OPS 2
+#define MAX_INSN_RELOAD_MEM_OPS 4
 static int try_spilled_reg_mem (gen_ctx_t gen_ctx, MIR_insn_t insn, int nop, MIR_reg_t loc,
                                 MIR_reg_t base_reg) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -9471,6 +9503,18 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog and insn splitting:\n");
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
+  /* Rebuild addr_regs with current variable numbers.  Variable numbers can
+     change after SSA rebuild following transform_addrs (e.g. SSA versions,
+     conventional SSA copies).  The register allocator needs addr_regs to force
+     address-taken variables onto the stack. */
+  if (addr_insn_p) {
+    bitmap_clear (addr_regs);
+    for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+      for (bb_insn_t bi = DLIST_HEAD (bb_insn_t, bb->bb_insns); bi != NULL;
+           bi = DLIST_NEXT (bb_insn_t, bi))
+        if (MIR_addr_code_p (bi->insn->code) && bi->insn->ops[1].mode == MIR_OP_VAR)
+          bitmap_set_bit_p (addr_regs, bi->insn->ops[1].u.var);
+  }
   if (machine_code_p) {
     code = target_translate (gen_ctx, &code_len);
     machine_code = func_item->u.func->call_addr = _MIR_publish_code (ctx, code, code_len);
