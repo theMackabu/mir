@@ -49,7 +49,8 @@ static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
 #if defined(__APPLE__)
   if (hard_reg == R18_HARD_REG) return TRUE;
 #endif
-  return (hard_reg == R29_HARD_REG /*FP*/ || hard_reg == SP_HARD_REG
+  return (hard_reg == R29_HARD_REG /*FP*/ || hard_reg == R30_HARD_REG /*LR*/
+          || hard_reg == SP_HARD_REG
           || hard_reg == TEMP_INT_HARD_REG1 || hard_reg == TEMP_INT_HARD_REG2
           || hard_reg == TEMP_FLOAT_HARD_REG1 || hard_reg == TEMP_FLOAT_HARD_REG2
           || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2
