@@ -238,6 +238,13 @@ target_link_libraries(gen_sieve mir)
 add_test(gen-test-loop gen_loop)
 add_test(gen-test-sieve gen_sieve)
 
+if(NOT WIN32)
+  add_executable (gc_mock_test "mir-tests/gc-mock-test.c")
+  target_include_directories(gc_mock_test PRIVATE ${PROJECT_SOURCE_DIR})
+  target_link_libraries(gc_mock_test mir)
+  add_test(gc-mock-test gc_mock_test)
+endif()
+
 # ------------------ readme example test ----------------
 
 add_executable (readme_example "mir-tests/readme-example.c")

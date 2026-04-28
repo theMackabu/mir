@@ -1591,7 +1591,8 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
 #endif
         }
       }
-      if (op.u.var_mem.type != type && op.u.var_mem.type != type2 && op.u.var_mem.type != type3)
+      if (op.u.var_mem.type != type && op.u.var_mem.type != type2 && op.u.var_mem.type != type3
+          && !(ch == '3' && op.u.var_mem.type == MIR_T_GC))
         return FALSE;
       if ((!index_p && op.u.var_mem.base != MIR_NON_VAR && op.u.var_mem.index != MIR_NON_VAR)
           || (op.u.var_mem.index != MIR_NON_VAR && op.u.var_mem.scale != 1)
@@ -2255,8 +2256,13 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
         exit (1);
       } else {
+        size_t code_offset = VARR_LENGTH (uint8_t, result_code);
+
         gen_assert (replacement != NULL);
         out_insn (gen_ctx, insn, replacement, NULL);
+        if (insn->code == MIR_CALL)
+          gen_record_gc_safepoint_offset (gen_ctx, insn, code_offset,
+                                          VARR_LENGTH (uint8_t, result_code));
       }
     }
   }

@@ -2063,7 +2063,8 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if (type == MIR_T_LD && op_ref->mode == MIR_OP_VAR && op_ref->u.var > MAX_HARD_REG) break;
       if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
       if (op_ref->u.var_mem.type != type && op_ref->u.var_mem.type != type2
-          && op_ref->u.var_mem.type != type3)
+          && op_ref->u.var_mem.type != type3
+          && !(ch == '3' && op_ref->u.var_mem.type == MIR_T_GC))
         return FALSE;
       if (op_ref->u.var_mem.index != MIR_NON_VAR && op_ref->u.var_mem.scale != 1
           && op_ref->u.var_mem.scale != 2 && op_ref->u.var_mem.scale != 4
@@ -2950,10 +2951,11 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
       if (MIR_branch_code_p (insn->code)) /* possible replacement change */
         ind = find_insn_pattern (gen_ctx, insn, NULL);
       gen_assert (ind >= 0);
-#ifndef NDEBUG
       size_t len_before = VARR_LENGTH (uint8_t, result_code);
-#endif
       out_insn (gen_ctx, insn, patterns[ind].replacement, NULL);
+      if (insn->code == MIR_CALL)
+        gen_record_gc_safepoint_offset (gen_ctx, insn, len_before,
+                                        VARR_LENGTH (uint8_t, result_code));
 #ifndef NDEBUG
       size_t insn_len = VARR_LENGTH (uint8_t, result_code) - len_before;
       if (insn_len > (size_t) patterns[ind].max_insn_size && insn->code != MIR_SWITCH) {

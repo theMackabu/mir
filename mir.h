@@ -165,13 +165,13 @@ typedef enum {
 typedef enum {
   REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */
   REP3 (TYPE_EL, F, D, LD),                             /* Float or (long) double type */
-  REP2 (TYPE_EL, P, BLK),                               /* Pointer, memory blocks */
+  REP3 (TYPE_EL, P, GC, BLK),                           /* Pointer, GC value, memory blocks */
   TYPE_EL (RBLK) = TYPE_EL (BLK) + MIR_BLK_NUM,         /* return block */
   REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
 static inline int MIR_int_type_p (MIR_type_t t) {
-  return (MIR_T_I8 <= t && t <= MIR_T_U64) || t == MIR_T_P;
+  return (MIR_T_I8 <= t && t <= MIR_T_U64) || t == MIR_T_P || t == MIR_T_GC;
 }
 
 static inline int MIR_fp_type_p (MIR_type_t t) { return MIR_T_F <= t && t <= MIR_T_LD; }
@@ -275,11 +275,47 @@ typedef struct {
 
 typedef struct MIR_insn *MIR_insn_t;
 
+typedef struct MIR_gc_root {
+  MIR_disp_t frame_offset; /* offset from MIR's canonical frame base */
+} MIR_gc_root_t;
+
+typedef struct MIR_gc_safepoint {
+  size_t code_offset;
+  size_t return_pc_offset;
+  size_t nroots;
+  const MIR_gc_root_t *roots;
+} MIR_gc_safepoint_t;
+
+typedef void (*MIR_gc_root_visitor_t) (void *root_addr, void *data);
+
+typedef enum MIR_call_gc_root_kind {
+  MIR_CALL_GC_ROOT_REG,
+  MIR_CALL_GC_ROOT_MEM,
+  MIR_CALL_GC_ROOT_SLOT,
+} MIR_call_gc_root_kind_t;
+
+typedef struct MIR_call_gc_root {
+  MIR_call_gc_root_kind_t kind;
+  union {
+    MIR_reg_t reg;
+    struct {
+      MIR_type_t type;
+      MIR_reg_t base_reg;
+      MIR_disp_t disp;
+      size_t count;
+      MIR_disp_t stride;
+    } mem;
+  } u;
+  struct MIR_call_gc_root *next;
+} *MIR_call_gc_root_t;
+
 /* Definition of link of double list of insns */
 DEF_DLIST_LINK (MIR_insn_t);
 
 struct MIR_insn {
   void *data; /* Aux data */
+  MIR_call_gc_root_t gc_roots;
+  size_t gc_safepoint_index;
   DLIST_LINK (MIR_insn_t) insn_link;
   MIR_insn_code_t code : 32;
   unsigned int nops : 32; /* number of operands */
@@ -312,6 +348,9 @@ typedef struct MIR_func {
   VARR (MIR_var_t) * global_vars; /* can be NULL */
   void *machine_code;             /* address of generated machine code or NULL */
   void *call_addr; /* address to call the function, it can be the same as machine_code */
+  MIR_gc_safepoint_t *gc_safepoints;
+  MIR_gc_root_t *gc_root_locs;
+  size_t gc_safepoints_num, gc_root_locs_num;
   void *internal;  /* internal data structure */
   struct MIR_lref_data *first_lref; /* label addr data of the func: defined by module load */
 } *MIR_func_t;
@@ -550,6 +589,15 @@ extern MIR_insn_t MIR_new_jcall_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn);
 
+extern void MIR_add_call_gc_root_reg (MIR_context_t ctx, MIR_insn_t call_insn, MIR_reg_t reg);
+extern void MIR_add_call_gc_root_mem (MIR_context_t ctx, MIR_insn_t call_insn, MIR_type_t type,
+                                      MIR_reg_t base_reg, MIR_disp_t disp, size_t count,
+                                      MIR_disp_t stride);
+extern const MIR_gc_safepoint_t *MIR_get_gc_safepoints (MIR_context_t ctx,
+                                                        MIR_item_t func_item, size_t *count);
+extern size_t MIR_visit_gc_roots (MIR_context_t ctx, MIR_item_t func_item, void *return_pc,
+                                  void *frame_base, MIR_gc_root_visitor_t visitor, void *data);
+
 extern const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code);
 extern size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn);
 extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int *out_p);
@@ -662,6 +710,7 @@ extern void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const c
                                        int vararg_p, MIR_var_t *args);
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
+extern void _MIR_clear_gc_safepoints (MIR_context_t ctx, MIR_func_t func);
 
 extern void _MIR_output_data_item_els (MIR_context_t ctx, FILE *f, MIR_item_t item, int c_p);
 extern void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff,
