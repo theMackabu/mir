@@ -531,6 +531,7 @@ static inline MIR_context_t MIR_init (void) {
 extern void MIR_finish (MIR_context_t ctx);
 
 extern MIR_module_t MIR_new_module (MIR_context_t ctx, const char *name);
+extern void MIR_remove_module (MIR_context_t ctx, MIR_module_t module);
 extern DLIST (MIR_module_t) * MIR_get_module_list (MIR_context_t ctx);
 extern MIR_item_t MIR_new_import (MIR_context_t ctx, const char *name);
 extern MIR_item_t MIR_new_export (MIR_context_t ctx, const char *name);
