@@ -899,12 +899,23 @@ static void remove_module (MIR_context_t ctx, MIR_module_t module, int free_modu
 
   while ((item = DLIST_HEAD (MIR_item_t, module->items)) != NULL) {
     DLIST_REMOVE (MIR_item_t, module->items, item);
+    item_tab_remove (ctx, item);
     remove_item (ctx, item);
   }
   if (module->data != NULL)
     bitmap_destroy (module->data);
   if (free_module_p)
     MIR_free (ctx->alloc, module);
+}
+
+void MIR_remove_module (MIR_context_t ctx, MIR_module_t module) {
+  if (module == NULL) return;
+  if (module == curr_module)
+    MIR_get_error_func (ctx) (MIR_finish_error, "remove when module %s is not finished", module->name);
+  if (module == &environment_module)
+    MIR_get_error_func (ctx) (MIR_wrong_param_value_error, "MIR_remove_module: environment module");
+  DLIST_REMOVE (MIR_module_t, all_modules, module);
+  remove_module (ctx, module, TRUE);
 }
 
 static void remove_all_modules (MIR_context_t ctx) {
