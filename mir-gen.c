@@ -4434,7 +4434,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   bb_t bb;
   bb_insn_t bb_insn, mem_bb_insn, new_bb_insn, new_bb_insn2, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
-  long gvn_insns_num = 0, ccp_insns_num = 0, deleted_branches_num = 0;
+  long gvn_insns_num MIR_UNUSED = 0, ccp_insns_num MIR_UNUSED = 0,
+       deleted_branches_num MIR_UNUSED = 0;
   bitmap_t curr_available_mem = temp_bitmap, removed_mem = temp_bitmap3;
   MIR_func_t func = curr_func_item->u.func;
 
@@ -5239,7 +5240,7 @@ static void calculate_mem_live_info (gen_ctx_t gen_ctx) {
 static void dse (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   uint32_t nloc;
-  long dead_stores_num = 0;
+  long dead_stores_num MIR_UNUSED = 0;
   ssa_edge_t se;
   bb_insn_t bb_insn, prev_bb_insn;
   bitmap_t live = temp_bitmap;
@@ -5340,7 +5341,7 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
   MIR_reg_t var;
   insn_var_iterator_t iter;
   ssa_edge_t ssa_edge;
-  long dead_insns_num = 0;
+  long dead_insns_num MIR_UNUSED = 0;
 
   DEBUG (2, { fprintf (debug_file, "+++++++++++++Dead code elimination:\n"); });
   VARR_TRUNC (bb_insn_t, temp_bb_insns, 0);
@@ -6505,7 +6506,7 @@ static void print_all_live_ranges (gen_ctx_t gen_ctx) {
 
 static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   size_t p;
-  long int pn, rn, old_rn;
+  long int pn, rn, old_rn MIR_UNUSED;
   live_range_t lr, prev_lr, next_lr;
   int born_p, dead_p, prev_dead_p;
   bitmap_iterator_t bi;
@@ -7053,7 +7054,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
   bb_insn_t bb_insn;
   mv_t mv;
   size_t nops;
-  int coalesced_moves = 0, change_p;
+  int coalesced_moves MIR_UNUSED = 0, change_p;
 
   gen_assert (optimize_level > 0);
   VARR_TRUNC (MIR_reg_t, first_coalesced_reg, 0);
@@ -7685,7 +7686,7 @@ static void assign (gen_ctx_t gen_ctx) {
   allocno_info_t allocno_info;
   MIR_func_t func = curr_func_item->u.func;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
-  const char *msg;
+  const char *msg MIR_UNUSED;
   const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
   bitmap_t conflict_locs = conflict_locs1, spill_lr_starts = temp_bitmap2;
 
@@ -8343,7 +8344,8 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
 static void rewrite (gen_ctx_t gen_ctx) {
   MIR_insn_t insn, next_insn, head_insn;
   MIR_reg_t base_reg = target_get_stack_slot_base_reg (gen_ctx);
-  size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
+  size_t insns_num MIR_UNUSED = 0, movs_num MIR_UNUSED = 0,
+         deleted_movs_num MIR_UNUSED = 0;
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
   const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
@@ -9154,7 +9156,7 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
   MIR_op_t temp_op, *op_ref;
   MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int out_p, change_p, block_change_p, label_only_p;
-  long insns_num = 0, deleted_insns_num = 0;
+  long insns_num MIR_UNUSED = 0, deleted_insns_num = 0;
 
   gen_assert (optimize_level > 0);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
@@ -9315,7 +9317,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
   int op_num, reg_def_p, dead_p;
   bitmap_t live;
   insn_var_iterator_t insn_var_iter;
-  long dead_insns_num = 0;
+  long dead_insns_num MIR_UNUSED = 0;
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
