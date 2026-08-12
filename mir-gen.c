@@ -2441,6 +2441,8 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
     for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
+      /* A redundant phi is deleted below, so its inputs need no redirection. */
+      if (insn->code == MIR_PHI && insn->ops[0].data != bb_insn) continue;
       FOREACH_IN_INSN_VAR (gen_ctx, iter, insn, var, op_num) {
         if (insn->ops[op_num].data == NULL) continue;
         insn->ops[op_num].data = skip_redundant_phis (insn->ops[op_num].data);
