@@ -19,10 +19,14 @@ mir_warn_args = cc.get_supported_arguments([
   '-Wno-conversion',
 ])
 
+mir_release_args = []
+if not get_option('debug')
+  mir_release_args += ['-DNDEBUG', '-DMIR_NO_GEN_DEBUG=1']
+endif
+
 mir_lib = static_library(
-  'mir',
-  mir_sources,
-  c_args: mir_warn_args,
+  'mir', mir_sources,
+  c_args: mir_warn_args + mir_release_args,
   install: false,
 )
 

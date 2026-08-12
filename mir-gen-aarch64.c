@@ -1730,6 +1730,8 @@ static const struct pattern patterns[] = {
   {MIR_UI2D, "r r", "9e630000:ffff0000 vd0 rn1"}, /* ucvtf Dd,Rn */
   {MIR_F2I, "r r", "9e380000:ffff0000 rd0 vn1"},  /* fcvtzs Rd,Sn */
   {MIR_D2I, "r r", "9e780000:ffff0000 rd0 vn1"},  /* fcvtzs Rd,Dn */
+  {MIR_I2DB, "r r", "9e670000:ffff0000 vd0 rn1"}, /* fmov Dd,Rn (bitcast) */
+  {MIR_D2IB, "r r", "9e660000:ffff0000 rd0 vn1"}, /* fmov Rd,Dn (bitcast) */
   {MIR_F2D, "r r", "1e22c000:fffffc00 vd0 vn1"},  /* fcvt Dd,Sn */
   {MIR_D2F, "r r", "1e624000:fffffc00 vd0 vn1"},  /* fcvt Sd,Dn */
   // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins

@@ -993,6 +993,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP6 (LAB_EL, MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32);
     REP6 (LAB_EL, MIR_I2F, MIR_I2D, MIR_I2LD, MIR_UI2F, MIR_UI2D, MIR_UI2LD);
     REP8 (LAB_EL, MIR_F2I, MIR_D2I, MIR_LD2I, MIR_F2D, MIR_F2LD, MIR_D2F, MIR_D2LD, MIR_LD2F);
+    REP2 (LAB_EL, MIR_I2DB, MIR_D2IB);
     REP6 (LAB_EL, MIR_LD2D, MIR_NEG, MIR_NEGS, MIR_FNEG, MIR_DNEG, MIR_LDNEG);
     REP6 (LAB_EL, MIR_ADDR, MIR_ADDR8, MIR_ADDR16, MIR_ADDR32, MIR_ADD, MIR_ADDS);
     REP8 (LAB_EL, MIR_FADD, MIR_DADD, MIR_LDADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, MIR_LDSUB);
@@ -1208,6 +1209,20 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     long double ld = *get_ldop (bp, ops + 1);
 
     *r = (int64_t) ld;
+    END_INSN;
+  }
+  CASE (MIR_I2DB, 2) {
+    double *r = get_dop (bp, ops);
+    int64_t i = *get_iop (bp, ops + 1);
+
+    memcpy (r, &i, sizeof (double));
+    END_INSN;
+  }
+  CASE (MIR_D2IB, 2) {
+    int64_t *r = get_iop (bp, ops);
+    double d = *get_dop (bp, ops + 1);
+
+    memcpy (r, &d, sizeof (int64_t));
     END_INSN;
   }
 

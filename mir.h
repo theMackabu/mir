@@ -98,6 +98,7 @@ typedef enum {
   REP3 (INSN_EL, UI2F, UI2D, UI2LD), /* Unsigned integer to float or (long) double conversion */
   REP3 (INSN_EL, F2I, D2I, LD2I),    /* Float or (long) double to integer conversion */
   REP6 (INSN_EL, F2D, F2LD, D2F, D2LD, LD2F, LD2D), /* Float, (long) double conversions */
+  REP2 (INSN_EL, I2DB, D2IB), /* 64-bit int <-> double bitwise casts (no value conversion) */
   REP5 (INSN_EL, NEG, NEGS, FNEG, DNEG, LDNEG),     /* Changing sign */
   REP4 (INSN_EL, ADDR, ADDR8, ADDR16, ADDR32), /* reg addr in natural mode or given integer mode */
   /* 3 operand insn: */

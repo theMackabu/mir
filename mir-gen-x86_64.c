@@ -1644,6 +1644,8 @@ static struct pattern patterns[] = {
   {MIR_F2I, "r mf", "F3 X 0F 2C r0 m1", 0}, /* cvttss2si r0,m1 */
   {MIR_D2I, "r r", "F2 X 0F 2C r0 R1", 0},  /* cvttsd2si r0,r1 */
   {MIR_D2I, "r md", "F2 X 0F 2C r0 m1", 0}, /* cvttsd2si r0,m1 */
+  {MIR_I2DB, "r r", "66 X 0F 6E r0 R1", 0}, /* movq xmm(r0),r1 (bitcast) */
+  {MIR_D2IB, "r r", "66 X 0F 7E r1 R0", 0}, /* movq r0,xmm(r1) (bitcast) */
 
   {MIR_F2D, "r r", "F3 Y 0F 5A r0 R1", 0},  /* cvtss2sd r0,r1 */
   {MIR_F2D, "r mf", "F3 Y 0F 5A r0 m1", 0}, /* cvtss2sd r0,m1 */
