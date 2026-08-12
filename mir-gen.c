@@ -3502,6 +3502,7 @@ DEF_VARR (insn_nop_pair_t);
 
 struct gvn_ctx {
   MIR_insn_t temp_mem_insn;
+  bitmap_t nonalloca_mem;
   VARR (expr_t) * exprs; /* the expr number -> expression */
   VARR (mem_expr_t) * mem_exprs;
   HTAB (expr_t) * expr_tab; /* keys: insn code and input operands */
@@ -3511,6 +3512,7 @@ struct gvn_ctx {
 };
 
 #define temp_mem_insn gen_ctx->gvn_ctx->temp_mem_insn
+#define nonalloca_mem gen_ctx->gvn_ctx->nonalloca_mem
 #define exprs gen_ctx->gvn_ctx->exprs
 #define mem_exprs gen_ctx->gvn_ctx->mem_exprs
 #define expr_tab gen_ctx->gvn_ctx->expr_tab
@@ -5052,6 +5054,7 @@ static void init_gvn (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
 
   gen_ctx->gvn_ctx = gen_malloc (gen_ctx, sizeof (struct gvn_ctx));
+  nonalloca_mem = bitmap_create2 (alloc, 256);
   VARR_CREATE (expr_t, exprs, alloc, 512);
   HTAB_CREATE (expr_t, expr_tab, alloc, 1024, expr_hash, expr_eq, gen_ctx);
   temp_mem_insn
@@ -5064,6 +5067,7 @@ static void init_gvn (gen_ctx_t gen_ctx) {
 }
 
 static void finish_gvn (gen_ctx_t gen_ctx) {
+  bitmap_destroy (nonalloca_mem);
   VARR_DESTROY (expr_t, exprs);
   HTAB_DESTROY (expr_t, expr_tab);
   gen_free (gen_ctx, temp_mem_insn); /* ??? */
@@ -5123,10 +5127,7 @@ static void update_call_mem_live (gen_ctx_t gen_ctx, bitmap_t mem_live, MIR_insn
   if (full_escape_p || alloca_arg_p (gen_ctx, call_insn)) {
     bitmap_set_bit_range_p (mem_live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
   } else {
-    mem_attr_t *mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
-
-    for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++)
-      if (!mem_attr_addr[i].alloca_flag) bitmap_set_bit_p (mem_live, i);
+    bitmap_ior (mem_live, mem_live, nonalloca_mem);
   }
 }
 
@@ -5154,6 +5155,14 @@ static void make_live_from_mem (gen_ctx_t gen_ctx, MIR_op_t *mem_ref, bitmap_t g
   mem_attr_t *mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
 
   gen_assert (mem_ref->mode == MIR_OP_VAR_MEM);
+  if (!must_alloca_p && mem_ref->u.var_mem.alias == 0 && mem_ref->u.var_mem.nonalias == 0) {
+    size_t len = VARR_LENGTH (mem_attr_t, mem_attrs);
+    if (len > 1) {
+      bitmap_set_bit_range_p (gen, 1, len - 1);
+      if (kill != NULL) bitmap_clear_bit_range_p (kill, 1, len - 1);
+    }
+    return;
+  }
   for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++) {
     if (!may_alias_p (mem_ref->u.var_mem.alias, mem_attr_addr[i].alias, mem_ref->u.var_mem.nonalias,
                       mem_attr_addr[i].nonalias))
@@ -5245,7 +5254,14 @@ static void dse (gen_ctx_t gen_ctx) {
   long dead_stores_num MIR_UNUSED = 0;
   ssa_edge_t se;
   bb_insn_t bb_insn, prev_bb_insn;
+  mem_attr_t *mem_attr_addr;
   bitmap_t live = temp_bitmap;
+
+  /* Non-escaping calls make the same memory locations live every time.  */
+  bitmap_clear (nonalloca_mem);
+  mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
+  for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++)
+    if (!mem_attr_addr[i].alloca_flag) bitmap_set_bit_p (nonalloca_mem, i);
 
   calculate_mem_live_info (gen_ctx);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
