@@ -6021,7 +6021,7 @@ typedef struct live_range *live_range_t; /* vars */
 struct live_range {
   lr_bb_t lr_bb; /* first BB which is entirely in this range, NULL otherwise */
   int start, finish;
-  int ref_cost;
+  int spill_cost; /* negative until calculated */
   /* to smaller start and finish, but still this start can be equal to the next finish: */
   live_range_t next;
 };
@@ -6409,7 +6409,7 @@ static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish,
   gen_assert (finish < 0 || start <= finish);
   lr->start = start;
   lr->finish = finish;
-  lr->ref_cost = 1;
+  lr->spill_cost = -1;
   lr->next = next;
   lr->lr_bb = NULL;
   return lr;
@@ -7511,6 +7511,8 @@ static int available_hreg_p (int hreg, MIR_reg_t type, int nregs, bitmap_t *conf
 
 /* Return cost spill of given lr */
 static int gap_lr_spill_cost (gen_ctx_t gen_ctx, live_range_t lr) {
+  /* Assignment does not change live-range BB membership or loop nesting. */
+  if (lr->spill_cost >= 0) return lr->spill_cost;
   int cost_factor = LOOP_COST_FACTOR / 2;
   bitmap_clear (temp_bitmap);
   for (lr_bb_t lr_bb = lr->lr_bb; lr_bb != NULL; lr_bb = lr_bb->next)
@@ -7533,7 +7535,7 @@ static int gap_lr_spill_cost (gen_ctx_t gen_ctx, live_range_t lr) {
         max_level = level;
     if (max_level >= 0) cost += (max_level < bb_level ? max_level : bb_level) * cost_factor;
   }
-  return cost;
+  return lr->spill_cost = cost;
 }
 
 static void find_lr_gaps (gen_ctx_t gen_ctx, live_range_t for_lr, MIR_reg_t hreg, MIR_type_t type,
