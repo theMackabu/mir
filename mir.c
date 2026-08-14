@@ -1840,6 +1840,17 @@ static int setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_it
   return redef_p;
 }
 
+MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name) {
+  MIR_item_t item;
+  string_t string;
+
+  if (name == NULL
+      || !string_find (&strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}, &string)
+      || (item = item_tab_find (ctx, string.str.s, &environment_module)) == NULL)
+    return NULL;
+  return item->ref_def == NULL ? item : item->ref_def;
+}
+
 static void undefined_interface (MIR_context_t ctx) {
   MIR_get_error_func (ctx) (MIR_call_op_error, "undefined call interface");
 }

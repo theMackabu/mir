@@ -193,7 +193,7 @@ clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests
 
 test: readme-example-test mir-bin-run-test c2mir-test
 
-test-all: adt-test simplify-test io-test scan-test mir2c-test $(L2M-TEST) test
+test-all: adt-test simplify-test io-test scan-test global-item-test mir2c-test $(L2M-TEST) test
 
 bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
 	@echo ==============================Bench is done
@@ -378,7 +378,7 @@ clean-mir-tests: clean-mir-utility-tests clean-mir-interp-tests clean-mir-gen-te
 
 # ------------------ MIR utility tests ------------------------
 
-.PHONY: simplify-test scan-test io-test clean-mir-utility-tests
+.PHONY: simplify-test scan-test io-test global-item-test clean-mir-utility-tests
 
 simplify-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/simplify.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/simplify-test $(LDLIBS) && $(BUILD_DIR)/simplify-test$(EXE)
@@ -392,10 +392,14 @@ scan-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/scan-test.c
 io-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/io.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/io-test $(LDLIBS) && $(BUILD_DIR)/io-test$(EXE)
 
+global-item-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/global-item.c
+	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/global-item-test $(LDLIBS) && $(BUILD_DIR)/global-item-test$(EXE)
+
 clean-mir-utility-tests:
 	$(RM) $(BUILD_DIR)/run-test$(EXE) $(BUILD_DIR)/simplify-test$(EXE)
 	$(RM) $(BUILD_DIR)/hello-test$(EXE)
 	$(RM) $(BUILD_DIR)/scan-test$(EXE) $(BUILD_DIR)/io-test$(EXE)
+	$(RM) $(BUILD_DIR)/global-item-test$(EXE)
 
 # ------------------ MIR interp tests --------------------------
 
